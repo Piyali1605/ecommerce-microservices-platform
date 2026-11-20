@@ -1,4 +1,6 @@
+using MassTransit;
 using UserService.Application.DTOs;
+using UserService.Application.Events;
 using UserService.Domain.Entities;
 using UserService.Domain.Interfaces;
 
@@ -13,14 +15,12 @@ public interface IOrderManagementService
 public class OrderManagementService : IOrderManagementService
 {
     private readonly IOrderRepository _orderRepo;
-    private readonly IProductRepository _productRepo;
-    private readonly IUserRepository _userRepo;
+    private readonly IPublishEndpoint _publishEndpoint;
 
-    public OrderManagementService(IOrderRepository orderRepo, IProductRepository productRepo, IUserRepository userRepo)
+    public OrderManagementService(IOrderRepository orderRepo, IPublishEndpoint publishEndpoint)
     {
         _orderRepo = orderRepo;
-        _productRepo = productRepo;
-        _userRepo = userRepo;
+        _publishEndpoint = publishEndpoint;
     }
 
     public async Task<IEnumerable<OrderDto>> GetAllAsync(CancellationToken ct = default) =>
@@ -28,16 +28,14 @@ public class OrderManagementService : IOrderManagementService
 
     public async Task<OrderDto> PlaceOrderAsync(PlaceOrderRequest request, CancellationToken ct = default)
     {
-        var user = await _userRepo.GetByIdAsync(request.UserId, ct)
-            ?? throw new KeyNotFoundException("User not found.");
-        var product = await _productRepo.GetByIdAsync(request.ProductId, ct)
-            ?? throw new KeyNotFoundException("Product not found.");
-
-        product.DeductStock(request.Quantity);
-        await _productRepo.UpdateAsync(product, ct);
-
-        var order = Order.Place(user.Id, product.Id, request.Quantity, product.Price);
+        // 1. Save Order strictly inside OrderDbContext
+        var order = Order.Place(request.UserId, request.ProductId, request.Quantity, request.UnitPrice);
         var saved = await _orderRepo.AddAsync(order, ct);
+
+        // 2. Publish asynchronous integration event to RabbitMQ
+        await _publishEndpoint.Publish(new OrderPlacedEvent(
+            saved.Id, saved.UserId, saved.ProductId, saved.Quantity, saved.TotalAmount, saved.OrderedAt
+        ), ct);
 
         return new OrderDto(saved.Id, saved.UserId, saved.ProductId, saved.Quantity, saved.TotalAmount, saved.Status, saved.OrderedAt);
     }

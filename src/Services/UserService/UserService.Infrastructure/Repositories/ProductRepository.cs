@@ -8,8 +8,8 @@ namespace UserService.Infrastructure.Repositories;
 
 public class ProductRepository : IProductRepository
 {
-    private readonly UserDbContext _context;
-    public ProductRepository(UserDbContext context) => _context = context;
+    private readonly ProductDbContext  _context;
+    public ProductRepository(ProductDbContext  context) => _context = context;
 
     public async Task<IEnumerable<Product>> GetAllAsync(CancellationToken ct = default) =>
         await _context.Products.AsNoTracking().ToListAsync(ct);

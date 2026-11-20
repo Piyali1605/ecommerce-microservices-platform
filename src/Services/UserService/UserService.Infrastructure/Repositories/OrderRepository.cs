@@ -8,8 +8,8 @@ namespace UserService.Infrastructure.Repositories;
 
 public class OrderRepository : IOrderRepository
 {
-    private readonly UserDbContext _context;
-    public OrderRepository(UserDbContext context) => _context = context;
+    private readonly OrderDbContext _context;
+    public OrderRepository(OrderDbContext context) => _context = context;
 
     public async Task<IEnumerable<Order>> GetAllAsync(CancellationToken ct = default) =>
         await _context.Orders.AsNoTracking().ToListAsync(ct);
